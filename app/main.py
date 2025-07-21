@@ -5,6 +5,7 @@ import pyautogui
 import pytesseract
 from PIL import Image, ImageOps, ImageFilter
 import os
+import win32gui
 
 # Configurações do Tesseract
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -20,10 +21,16 @@ def preprocess_image(img):
     for y in range(height):
         for x in range(width):
             r, g, b = pixels[x, y]
-            if b > 100 and b > r + 40 and b > g + 40:
+            # filtra só azul forte para isolar o texto do chat
+            if (
+                b > 180 and       # azul alto
+                r < 60 and        # vermelho baixo
+                70 < g < 120      # verde moderado (mais que vermelho, menos que azul)
+            ):
                 mask_pixels[x, y] = 255
             else:
                 mask_pixels[x, y] = 0
+
 
     processed = mask
     processed = ImageOps.autocontrast(processed)
@@ -31,12 +38,36 @@ def preprocess_image(img):
     processed = processed.convert('L')
     return processed
 
-def main():
-    janela = gw.getWindowsWithTitle('The Classic PW')[0]
+def focar_janela(janela):
+    hwnd = win32gui.FindWindow(None, janela.title)
+    if hwnd:
+        # traz a janela para frente sem redimensionar
+        import win32con, win32api
+        win32gui.SetForegroundWindow(hwnd)
+        print(f"Focou a janela: {janela.title}")
+    else:
+        print(f"Janela não encontrada: {janela.title}")
 
-    if not janela:
-        print("Janela com 'PW' não encontrada.")
+def limpar_texto():
+    pyautogui.hotkey('ctrl', 'a')
+    time.sleep(0.2)
+    pyautogui.press('backspace')
+    time.sleep(0.2)
+    pyautogui.press('backspace')
+    time.sleep(0.2)
+
+
+
+def digitar_texto(texto):
+    pyautogui.write(str(texto), interval=0.05)
+
+def main():
+    janelas = gw.getWindowsWithTitle('The Classic PW')
+    if not janelas:
+        print("Janela do PW não encontrada.")
         return
+
+    janela = janelas[0]
 
     x, y, w, h = janela.left, janela.top, janela.width, janela.height
 
@@ -83,6 +114,26 @@ def main():
     print(f"Linha após regex: {linha_limpa}")
     print(f"Números extraídos: {numeros_int}")
     print(f"Soma: {soma}")
+
+    # Focar o PW e digitar resposta
+    focar_janela(janela)
+    time.sleep(0.5)
+
+    # Abrir chat
+    pyautogui.press('enter')
+    time.sleep(0.3)
+
+    # Limpar texto do chat
+    limpar_texto()
+
+    # Digitar soma
+    digitar_texto(soma)
+    time.sleep(0.3)
+
+    # Enviar mensagem
+    pyautogui.press('enter')
+
+    print("Resposta digitada no chat!")
 
 if __name__ == "__main__":
     main()
